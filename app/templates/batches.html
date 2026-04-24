@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}الـ Batches{% endblock %}
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-collection me-2"></i>سجل الملفات المرفوعة</h4>
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>اسم الملف</th><th>وقت الرفع</th><th>الصفحات</th>
+          <th>الحالة</th><th>Excel</th><th>Odoo</th><th>مكررات</th><th>إجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for item in batch_list %}
+      {% set b = item.batch %}
+      <tr>
+        <td class="fw-bold">{{ b.filename }}</td>
+        <td><small>{{ b.upload_time }}</small></td>
+        <td>{{ b.page_count }}</td>
+        <td><span class="badge badge-{{ b.status }}">{{ b.status }}</span></td>
+        <td>
+          {% if b.excel_exported_at %}
+            <i class="bi bi-check-circle-fill text-success"></i>
+            <small>{{ b.excel_exported_at }}</small>
+          {% else %}
+            <i class="bi bi-dash text-muted"></i>
+          {% endif %}
+        </td>
+        <td>
+          {% if b.odoo_pushed_at %}
+            <i class="bi bi-check-circle-fill text-primary"></i>
+          {% else %}
+            <i class="bi bi-dash text-muted"></i>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.dup_count > 0 %}
+            <span class="badge bg-warning text-dark">{{ item.dup_count }} مكرر</span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="/batches/{{ b.id }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye"></i> مراجعة</a>
+          <a href="/api/v1/batches/{{ b.id }}/excel" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-file-excel"></i></a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-center text-muted py-4">لا توجد ملفات مرفوعة بعد</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

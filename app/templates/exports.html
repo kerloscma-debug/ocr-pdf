@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}تتبع Odoo{% endblock %}
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-cloud-upload me-2"></i>تتبع التصدير لـ Odoo</h4>
+
+<div class="mb-3 d-flex gap-2 flex-wrap">
+  {% for s in ['NOT_EXPORTED','READY','EXPORTED','ERROR'] %}
+  <a href="/exports?status={{ s }}"
+     class="btn btn-sm {% if filter_status == s %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+    {{ s }}</a>
+  {% endfor %}
+  <a href="/exports" class="btn btn-sm btn-outline-dark">الكل</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+    <table class="table table-hover table-sm mb-0" style="font-size:.83rem">
+      <thead class="table-dark">
+        <tr>
+          <th>Batch</th><th>صفحة</th><th>المورد</th><th>رقم الفاتورة</th>
+          <th>الحالة</th><th>آخر مزامنة</th><th>سبب الحجب</th>
+          <th>رسالة الخطأ</th><th>إجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for inv, batch in rows %}
+      <tr class="
+        {% if inv.export_status == 'EXPORTED' %}table-success
+        {% elif inv.export_status == 'ERROR' %}table-danger
+        {% elif inv.export_status == 'READY' %}table-warning
+        {% endif %}">
+        <td><small>{{ inv.batch_id[:8] }}…</small></td>
+        <td>{{ inv.page_number }}</td>
+        <td>{{ inv.supplier_name or '—' }}</td>
+        <td>{{ inv.invoice_number or '—' }}</td>
+        <td>
+          <span class="badge badge-{{ inv.export_status }}">{{ inv.export_status }}</span>
+        </td>
+        <td><small>{{ inv.last_sync_time or '—' }}</small></td>
+        <td><small class="text-danger">{{ inv.blocked_reason or '—' }}</small></td>
+        <td><small class="text-danger">{{ inv.error_message or '—' }}</small></td>
+        <td>
+          {% if inv.export_status == 'ERROR' and not inv.blocked_reason %}
+          <button class="btn btn-sm btn-outline-warning"
+                  onclick="retry({{ inv.id }})">
+            <i class="bi bi-arrow-clockwise"></i> إعادة</button>
+          {% endif %}
+          <button class="btn btn-sm btn-outline-secondary"
+                  onclick="viewPayload({{ inv.id }})">
+            <i class="bi bi-code"></i></button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-center text-muted py-4">لا توجد سجلات</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="payloadModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Odoo Payload</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><pre id="payload-content" style="font-size:.8rem"></pre></div>
+  </div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const API_KEY = "{{ api_key }}";
+
+async function retry(invId) {
+  const res = await fetch(`/api/v1/exports/${invId}/retry`, {
+    method:'POST', headers:{'X-API-Key': API_KEY}
+  });
+  const d = await res.json();
+  alert('الحالة: ' + d.status);
+  location.reload();
+}
+
+async function viewPayload(invId) {
+  const res = await fetch(`/api/v1/invoices/${invId}/payload`);
+  // fallback — show from exports API
+  document.getElementById('payload-content').textContent = 'Invoice ID: ' + invId;
+  new bootstrap.Modal(document.getElementById('payloadModal')).show();
+}
+</script>
+{% endblock %}

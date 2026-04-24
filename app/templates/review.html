@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}مراجعة Batch{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-search me-2"></i>مراجعة: {{ batch.filename }}</h4>
+  <div>
+    <span class="badge badge-{{ batch.status }} me-2">{{ batch.status }}</span>
+    <a href="/api/v1/batches/{{ batch.id }}/excel"
+       class="btn btn-success btn-sm me-1">
+      <i class="bi bi-file-excel me-1"></i>تصدير Excel</a>
+    <button class="btn btn-primary btn-sm" onclick="pushOdoo()">
+      <i class="bi bi-cloud-upload me-1"></i>رفع لـ Odoo</button>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col">
+    <small class="text-muted">
+      📄 {{ invoices|length }} صفحة |
+      ⚠️ {{ invoices|selectattr('requires_manual_review')|list|length }} تحتاج مراجعة |
+      🔁 {{ invoices|selectattr('is_duplicate')|list|length }} مكرر
+    </small>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+    <table class="table table-bordered table-hover table-sm mb-0" style="font-size:.82rem">
+      <thead class="table-dark">
+        <tr>
+          <th>ص</th><th>المورد</th><th>الرقم الضريبي</th>
+          <th>رقم الفاتورة</th><th>التاريخ</th>
+          <th>قبل الضريبة</th><th>الضريبة</th><th>الإجمالي</th>
+          <th>QR</th><th>VAT✓</th><th>Math✓</th><th>15%✓</th>
+          <th>الحالة</th><th>ملاحظات</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for inv in invoices %}
+      <tr class="{% if inv.is_duplicate %}dup-row{% elif inv.requires_manual_review %}review-row{% endif %}"
+          id="row-{{ inv.id }}">
+        <td>{{ inv.page_number }}</td>
+        <td>
+          {% if inv.is_duplicate %}
+            <span class="badge bg-warning text-dark me-1">مكرر</span>
+          {% endif %}
+          <span contenteditable="true" onblur="updateField({{ inv.id }},'supplier_name',this.textContent)">
+            {{ inv.supplier_name or '—' }}</span>
+        </td>
+        <td><span contenteditable="true" onblur="updateField({{ inv.id }},'vat_number',this.textContent)">
+          {{ inv.vat_number or '—' }}</span></td>
+        <td><span contenteditable="true" onblur="updateField({{ inv.id }},'invoice_number',this.textContent)">
+          {{ inv.invoice_number or '—' }}</span></td>
+        <td><span contenteditable="true" onblur="updateField({{ inv.id }},'invoice_date',this.textContent)">
+          {{ inv.invoice_date or '—' }}</span></td>
+        <td class="text-end"><span contenteditable="true" onblur="updateField({{ inv.id }},'amount_before_vat',this.textContent)">
+          {{ '%.2f'|format(inv.amount_before_vat) if inv.amount_before_vat else '—' }}</span></td>
+        <td class="text-end"><span contenteditable="true" onblur="updateField({{ inv.id }},'vat_amount',this.textContent)">
+          {{ '%.2f'|format(inv.vat_amount) if inv.vat_amount else '—' }}</span></td>
+        <td class="text-end"><span contenteditable="true" onblur="updateField({{ inv.id }},'total_amount',this.textContent)">
+          {{ '%.2f'|format(inv.total_amount) if inv.total_amount else '—' }}</span></td>
+        <td class="text-center">
+          {% if inv.qr_present %}
+            <i class="bi bi-qr-code flag-ok" title="{{ inv.qr_raw or '' }}"></i>
+            {% if inv.qr_consistent == false %}
+              <i class="bi bi-exclamation-triangle flag-warn" title="QR غير متسق"></i>
+            {% endif %}
+          {% else %}
+            <i class="bi bi-dash text-muted"></i>
+          {% endif %}
+        </td>
+        <td class="text-center">
+          {% if inv.vat_number_valid %}<i class="bi bi-check-circle flag-ok"></i>
+          {% else %}<i class="bi bi-x-circle flag-fail"></i>{% endif %}
+        </td>
+        <td class="text-center">
+          {% if inv.math_valid %}<i class="bi bi-check-circle flag-ok"></i>
+          {% else %}<i class="bi bi-x-circle flag-fail"></i>{% endif %}
+        </td>
+        <td class="text-center">
+          {% if inv.vat_rate_valid %}<i class="bi bi-check-circle flag-ok"></i>
+          {% else %}<i class="bi bi-x-circle flag-fail"></i>{% endif %}
+        </td>
+        <td>
+          {% if inv.blocked_reason %}
+            <span class="badge bg-danger" title="{{ inv.blocked_reason }}">محجوب</span>
+          {% elif inv.requires_manual_review %}
+            <span class="badge bg-warning text-dark">مراجعة</span>
+          {% else %}
+            <span class="badge bg-success">جاهز</span>
+          {% endif %}
+        </td>
+        <td><small class="text-muted">{{ inv.notes or '' }}</small></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const API_KEY = "{{ api_key }}";
+const BATCH_ID = "{{ batch.id }}";
+
+async function updateField(invId, field, value) {
+  const body = {};
+  const numFields = ['amount_before_vat','vat_amount','total_amount'];
+  body[field] = numFields.includes(field) ? parseFloat(value) || null : value.trim();
+  await fetch(`/api/v1/invoices/${invId}`, {
+    method:'PUT',
+    headers:{'Content-Type':'application/json','X-API-Key': API_KEY},
+    body: JSON.stringify(body)
+  });
+}
+
+async function pushOdoo() {
+  if (!confirm('رفع الفواتير الجاهزة لـ Odoo؟')) return;
+  const res = await fetch(`/api/v1/batches/${BATCH_ID}/push-odoo`, {
+    method:'POST', headers:{'X-API-Key': API_KEY}
+  });
+  const data = await res.json();
+  alert(`تم: ${data.filter(d=>d.status==='EXPORTED').length} فاتورة | خطأ: ${data.filter(d=>d.status==='ERROR').length}`);
+  location.reload();
+}
+</script>
+{% endblock %}

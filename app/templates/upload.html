@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}رفع فاتورة{% endblock %}
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-upload me-2"></i>رفع ملف فواتير</h4>
+<div class="card shadow-sm" style="max-width:600px">
+  <div class="card-body p-4">
+    <div id="drop-zone" class="border-2 border-dashed rounded p-5 text-center mb-3"
+         style="border:2px dashed #1F3864;cursor:pointer;background:#f8faff"
+         onclick="document.getElementById('fileInput').click()">
+      <i class="bi bi-file-earmark-arrow-up" style="font-size:3rem;color:#1F3864"></i>
+      <p class="mt-2 mb-0 fw-bold">اسحب الملف هنا أو اضغط للاختيار</p>
+      <small class="text-muted">PDF, JPG, PNG — حتى {{(50)}} MB</small>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" class="d-none">
+    <div id="file-info" class="mb-3 d-none">
+      <span class="badge bg-secondary" id="file-name"></span>
+    </div>
+    <button id="upload-btn" class="btn btn-primary w-100" disabled>
+      <i class="bi bi-cloud-upload me-2"></i>رفع وتحليل
+    </button>
+    <div id="progress-wrap" class="mt-3 d-none">
+      <div class="progress mb-2">
+        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+             style="width:0%"></div>
+      </div>
+      <small id="progress-msg" class="text-muted">جاري الرفع...</small>
+    </div>
+    <div id="result" class="mt-3"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const API_KEY = "{{ api_key }}";
+let selectedFile = null;
+
+const dz = document.getElementById('drop-zone');
+const fi = document.getElementById('fileInput');
+const btn = document.getElementById('upload-btn');
+
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.background='#e8f0fe'; });
+dz.addEventListener('dragleave', () => { dz.style.background='#f8faff'; });
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.style.background='#f8faff';
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+fi.addEventListener('change', () => { if (fi.files[0]) setFile(fi.files[0]); });
+
+function setFile(f) {
+  selectedFile = f;
+  document.getElementById('file-name').textContent = f.name;
+  document.getElementById('file-info').classList.remove('d-none');
+  btn.disabled = false;
+}
+
+btn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  btn.disabled = true;
+  document.getElementById('progress-wrap').classList.remove('d-none');
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  try {
+    const res = await fetch('/api/v1/upload', {
+      method:'POST', headers:{'X-API-Key': API_KEY}, body: fd
+    });
+    const data = await res.json();
+    if (data.duplicate_file) {
+      showResult('warning', `هذا الملف مرفوع مسبقاً — <a href="/batches/${data.batch_id}">عرض الـ Batch</a>`);
+    } else {
+      showResult('success', `تم الرفع! Batch ID: <strong>${data.batch_id}</strong><br>
+        <a href="/batches/${data.batch_id}" class="btn btn-sm btn-success mt-2">عرض النتائج</a>`);
+      pollStatus(data.batch_id);
+    }
+  } catch(e) {
+    showResult('danger', 'حدث خطأ: ' + e.message);
+    btn.disabled = false;
+  }
+});
+
+async function pollStatus(batchId) {
+  const bar = document.getElementById('progress-bar');
+  const msg = document.getElementById('progress-msg');
+  const poll = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/v1/batches/${batchId}`);
+      const d = await r.json();
+      if (d.status === 'REVIEWED' || d.status === 'UPLOADED') {
+        clearInterval(poll);
+        bar.style.width = '100%';
+        msg.textContent = d.status === 'REVIEWED' ? 'اكتمل التحليل ✓' : (d.notes || 'خطأ');
+      } else {
+        bar.style.width = '60%';
+        msg.textContent = 'جاري المعالجة...';
+      }
+    } catch(e) { clearInterval(poll); }
+  }, 3000);
+}
+
+function showResult(type, html) {
+  document.getElementById('result').innerHTML =
+    `<div class="alert alert-${type}">${html}</div>`;
+}
+</script>
+{% endblock %}

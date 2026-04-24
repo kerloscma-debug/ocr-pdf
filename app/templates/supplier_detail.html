@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}مورد: {{ sup.vat_number }}{% endblock %}
+{% block content %}
+<a href="/suppliers" class="btn btn-sm btn-outline-secondary mb-3">
+  <i class="bi bi-arrow-right me-1"></i>رجوع</a>
+<h4 class="mb-1"><i class="bi bi-building me-2"></i>{{ sup.vat_number }}</h4>
+<p class="text-muted mb-4">{{ trade_names|length }} اسم تجاري | {{ invoices|length }} فاتورة</p>
+
+<h6 class="fw-bold mb-2">الأسماء التجارية</h6>
+<div class="card shadow-sm mb-4">
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>الاسم التجاري</th><th>السجل التجاري</th>
+            <th>Odoo ID</th><th>الفواتير</th><th>الإجمالي (SAR)</th></tr>
+      </thead>
+      <tbody>
+      {% for tn in trade_names %}
+      <tr>
+        <td class="fw-bold">{{ tn.trade_name }}</td>
+        <td>{{ tn.commercial_reg or '—' }}</td>
+        <td>
+          {% if tn.odoo_vendor_id %}
+            <span class="badge bg-success">{{ tn.odoo_vendor_id }}</span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>{{ tn.total_invoices or 0 }}</td>
+        <td class="text-end">{{ '%.2f'|format(tn.total_amount_sar or 0) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h6 class="fw-bold mb-2">سجل الفواتير</h6>
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+    <table class="table table-hover table-sm mb-0" style="font-size:.83rem">
+      <thead class="table-dark">
+        <tr><th>Batch</th><th>ص</th><th>الاسم التجاري</th>
+            <th>رقم الفاتورة</th><th>التاريخ</th><th>الإجمالي</th>
+            <th>مكرر</th><th>Odoo</th></tr>
+      </thead>
+      <tbody>
+      {% for inv in invoices %}
+      <tr class="{% if inv.is_duplicate %}dup-row{% endif %}">
+        <td><a href="/batches/{{ inv.batch_id }}">{{ inv.batch_id[:8] }}…</a></td>
+        <td>{{ inv.page_number }}</td>
+        <td>{{ inv.trade_name or '—' }}</td>
+        <td>{{ inv.invoice_number or '—' }}</td>
+        <td>{{ inv.invoice_date or '—' }}</td>
+        <td class="text-end">{{ '%.2f'|format(inv.total_amount) if inv.total_amount else '—' }}</td>
+        <td>
+          {% if inv.is_duplicate %}
+            <span class="badge bg-warning text-dark" title="{{ inv.duplicate_notes }}">مكرر</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <span class="badge badge-{{ inv.export_status }}">{{ inv.export_status }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
